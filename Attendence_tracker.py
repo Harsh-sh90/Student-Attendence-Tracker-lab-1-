@@ -1,268 +1,146 @@
-import json
-import os
-import csv
-from datetime import date, datetime, timedelta
-from collections import defaultdict
+# tracker.py
+# Name: [Your Name]
+# Date: 07-11-2025
+# Assignment: 01 - Command-Line Attendance Tracker
 
-# --- Constants ---
-DATA_FILE = "attendance_data.json"
-BACKUP_FILE = "attendance_data_backup.json"
-VALID_STATUSES = ["present", "absent", "late"]
-
-# --- Classes for Better Organization ---
-
-class Student:
-    def __init__(self, name):
-        self.name = name
-        self.records = []  # List of {"date": "YYYY-MM-DD", "status": "present/absent/late"}
-
-    def add_record(self, date_str, status):
-        # Check if record already exists for the date
-        for record in self.records:
-            if record["date"] == date_str:
-                record["status"] = status
-                return True
-        self.records.append({"date": date_str, "status": status})
-        self.records.sort(key=lambda x: x["date"])
-        return True
-
-    def get_attendance_count(self, start_date=None, end_date=None):
-        filtered_records = self.records
-        if start_date and end_date:
-            filtered_records = [r for r in self.records if start_date <= r["date"] <= end_date]
-        counts = defaultdict(int)
-        for record in filtered_records:
-            counts[record["status"]] += 1
-        total_days = len(filtered_records)
-        return dict(counts), total_days
-
-    def get_percentage(self, total_possible_days):
-        present_count = sum(1 for r in self.records if r["status"] == "present")
-        return (present_count / total_possible_days * 100) if total_possible_days > 0 else 0
-
-class AttendanceTracker:
-    def __init__(self):
-        self.students = {}
-        self.load_data()
-
-    def load_data(self):
-        if os.path.exists(DATA_FILE):
-            try:
-                with open(DATA_FILE, "r") as f:
-                    data = json.load(f)
-                    for name, info in data.items():
-                        student = Student(name)
-                        if "records" in info:
-                            student.records = info["records"]
-                        elif "attendance" in info:  # Backward compatibility
-                            for d in info["attendance"]:
-                                student.add_record(d, "present")
-                        self.students[name] = student
-                print("Data loaded successfully.")
-            except (IOError, json.JSONDecodeError) as e:
-                print(f"Error loading data: {e}. Attempting to load backup.")
-                if os.path.exists(BACKUP_FILE):
-                    try:
-                        with open(BACKUP_FILE, "r") as f:
-                            data = json.load(f)
-                            # Similar loading logic
-                            for name, info in data.items():
-                                student = Student(name)
-                                if "records" in info:
-                                    student.records = info["records"]
-                                self.students[name] = student
-                        print("Backup data loaded.")
-                    except:
-                        print("Backup also corrupted. Starting fresh.")
-                        self.students = {}
-                else:
-                    print("No backup found. Starting fresh.")
-                    self.students = {}
-        else:
-            self.students = {}
-
-    def save_data(self):
-        try:
-            data = {name: {"records": student.records} for name, student in self.students.items()}
-            with open(DATA_FILE, "w") as f:
-                json.dump(data, f, indent=4)
-            # Create backup
-            with open(BACKUP_FILE, "w") as f:
-                json.dump(data, f, indent=4)
-            print("Data saved successfully.")
-        except IOError as e:
-            print(f"Error saving data: {e}")
-
-    def add_student(self, name):
-        if not name:
-            print("Error: Name cannot be empty.")
-            return False
-        if name in self.students:
-            print(f"Error: Student '{name}' already exists.")
-            return False
-        self.students[name] = Student(name)
-        print(f"Student '{name}' added successfully.")
-        self.save_data()
-        return True
-
-    def mark_attendance(self, name, date_str, status):
-        if name not in self.students:
-            print(f"Error: Student '{name}' not found.")
-            return False
-        if status not in VALID_STATUSES:
-            print(f"Error: Invalid status. Choose from {VALID_STATUSES}.")
-            return False
-        try:
-            date.fromisoformat(date_str)
-        except ValueError:
-            print("Error: Invalid date format. Use YYYY-MM-DD.")
-            return False
-        if self.students[name].add_record(date_str, status):
-            print(f"Attendance marked for '{name}' on {date_str} as {status}.")
-            self.save_data()
-            return True
-
-    def search_student(self, name):
-        if name in self.students:
-            student = self.students[name]
-            print(f"\n--- Attendance Record for {name} ---")
-            if not student.records:
-                print("No records found.")
-                return
-            counts, total = student.get_attendance_count()
-            print(f"Total records: {total}")
-            print(f"Present: {counts.get('present', 0)}, Absent: {counts.get('absent', 0)}, Late: {counts.get('late', 0)}")
-            print("Records:")
-            for record in student.records:
-                print(f"  {record['date']}: {record['status']}")
-        else:
-            print(f"Student '{name}' not found.")
-
-    def delete_student(self, name):
-        if name not in self.students:
-            print(f"Error: Student '{name}' not found.")
-            return False
-        confirm = input(f"Delete '{name}'? (y/n): ").strip().lower()
-        if confirm == 'y':
-            del self.students[name]
-            print(f"Student '{name}' deleted.")
-            self.save_data()
-            return True
-        print("Deletion cancelled.")
-        return False
-
-    def view_all_students(self):
-        print("\n--- All Students Summary ---")
-        if not self.students:
-            print("No students.")
-            return
-        for name, student in self.students.items():
-            counts, total = student.get_attendance_count()
-            print(f"{name}: Total {total}, Present {counts.get('present', 0)}, Absent {counts.get('absent', 0)}, Late {counts.get('late', 0)}")
-
-    def count_attendance(self, start_date=None, end_date=None):
-        print("\n--- Attendance Count ---")
-        total_present = total_absent = total_late = 0
-        for student in self.students.values():
-            counts, _ = student.get_attendance_count(start_date, end_date)
-            total_present += counts.get('present', 0)
-            total_absent += counts.get('absent', 0)
-            total_late += counts.get('late', 0)
-        print(f"Overall: Present {total_present}, Absent {total_absent}, Late {total_late}")
-        if start_date and end_date:
-            print(f"For period {start_date} to {end_date}")
-
-    def view_by_date(self, date_str):
-        print(f"\n--- Attendance on {date_str} ---")
-        found = False
-        for name, student in self.students.items():
-            for record in student.records:
-                if record["date"] == date_str:
-                    print(f"{name}: {record['status']}")
-                    found = True
-                    break
-        if not found:
-            print("No records for this date.")
-
-    def export_to_csv(self, filename="attendance_export.csv"):
-        try:
-            with open(filename, "w", newline="") as f:
-                writer = csv.writer(f)
-                writer.writerow(["Student", "Date", "Status"])
-                for name, student in self.students.items():
-                    for record in student.records:
-                        writer.writerow([name, record["date"], record["status"]])
-            print(f"Data exported to {filename}")
-        except IOError as e:
-            print(f"Error exporting: {e}")
-
-# --- Menu and Main Loop ---
-
-def print_menu():
-    print("\n===== Enhanced Student Attendance Tracker =====")
-    print("1. Add Student")
-    print("2. Mark Attendance")
-    print("3. Search Student")
-    print("4. Delete Student")
-    print("5. View All Summary")
-    print("6. Count Attendance")
-    print("7. View by Date")
-    print("8. Export to CSV")
-    print("9. Exit")
-    print("================================================")
-
-def get_date_input(prompt, default_today=True):
-    today_str = date.today().isoformat()
-    date_str = input(f"{prompt} [default: {today_str}]: ").strip()
-    if not date_str and default_today:
-        return today_str
-    return date_str
+import datetime
 
 def main():
-    tracker = AttendanceTracker()
-    try:
-        while True:
-            print_menu()
-            choice = input("Enter choice (1-9): ").strip()
-            if choice == '1':
-                name = input("Enter student's full name: ").strip().title()
-                tracker.add_student(name)
-            elif choice == '2':
-                name = input("Enter student's name: ").strip().title()
-                date_str = get_date_input("Enter date (YYYY-MM-DD)")
-                status = input(f"Enter status ({'/'.join(VALID_STATUSES)}): ").strip().lower()
-                tracker.mark_attendance(name, date_str, status)
-            elif choice == '3':
-                name = input("Enter student's name: ").strip().title()
-                tracker.search_student(name)
-            elif choice == '4':
-                name = input("Enter student's name: ").strip().title()
-                tracker.delete_student(name)
-            elif choice == '5':
-                tracker.view_all_students()
-            elif choice == '6':
-                start = get_date_input("Start date (YYYY-MM-DD)", default_today=False)
-                end = get_date_input("End date (YYYY-MM-DD)", default_today=False)
-                tracker.count_attendance(start or None, end or None)
-            elif choice == '7':
-                date_str = get_date_input("Enter date to view")
-                tracker.view_by_date(date_str)
-            elif choice == '8':
-                filename = input("Enter filename [default: attendance_export.csv]: ").strip()
-                if not filename:
-                    filename = "attendance_export.csv"
-                tracker.export_to_csv(filename)
-            elif choice == '9':
-                print("Exiting. Goodbye!")
-                break
+    """
+    Main function to run the attendance tracker.
+    """
+    
+    # Task 1: Welcome Message 
+    print("===========================================")
+    print(" K.R. Mangalam University Attendance Tracker")
+    print("===========================================")
+    print("This tool helps you record student attendance.\n")
+
+    # Dictionary to store attendance 
+    attendance_data = {}
+
+    # Task 5: Absentee Validation (Optional)
+    while True:
+        try:
+            total_students = int(input("Enter the total number of students in the class: "))
+            if total_students < 0:
+                print("Total students cannot be a negative number. Please try again.")
             else:
-                print("Invalid choice.")
-    except KeyboardInterrupt:
-        print("\nInterrupted. Saving data...")
-        tracker.save_data()
-        print("Data saved. Exiting.")
+                break
+        except ValueError:
+            print("Invalid input. Please enter a whole number.")
+
+    # Task 2: Input & Data Collection 
+    while True:
+        try:
+            num_entries = int(input("How many students do you want to mark present? "))
+            if num_entries < 0:
+                print("Number of entries cannot be negative. Please try again.")
+            elif num_entries > total_students:
+                print(f"Entries cannot exceed total students ({total_students}). Please try again.")
+            else:
+                break
+        except ValueError:
+            print("Invalid input. Please enter a whole number.")
+
+    print(f"\nPlease enter data for {num_entries} student(s)...")
+
+    # Use a loop to collect data
+    for i in range(num_entries):
+        print(f"\n--- Entry {i + 1} ---")
+        
+        # --- Task 3: Data Validation ---
+        
+        # Validate Name (Blank and Duplicate)
+        while True:
+            name = input("Enter student name: ").strip().title()
+            
+            if not name:
+                print("! ERROR: Name cannot be empty. Please re-enter.")
+            elif name in attendance_data:
+                print("! ERROR: This student's attendance has already been recorded.")
+            else:
+                break
+                
+        # Validate Timestamp (Blank)
+        while True:
+            timestamp = input(f"Enter check-in time (e.g., 09:15 AM): ").strip().upper()
+            
+            if not timestamp:
+                print("! ERROR: Timestamp cannot be missing. Please re-enter the time.")
+            else:
+                break
+        
+        # Store valid data in the dictionary 
+        attendance_data[name] = timestamp
+
+    # --- Task 4 & 5: Attendance Summary Generation --- [cite: 61, 67]
+    
+    print("\n\n===========================================")
+    print("      *** Attendance Summary ***")
+    print("===========================================")
+    
+    # Use f-strings and \t for formatting [cite: 63, 65]
+    print(f"Student Name\t\tCheck-in Time\n{'-'*35}")
+    
+    for name, time in attendance_data.items():
+        # Using \t for alignment. Assumes names are not excessively long.
+        if len(name) < 16:
+            print(f"{name}\t\t{time}")
+        else:
+            print(f"{name}\t{time}")
+
+    print("\n-------------------------------------------")
+    
+    # Calculate present and absent counts [cite: 64, 69]
+    present_count = len(attendance_data)
+    absent_count = total_students - present_count
+    
+    print(f"Total Students Present:\t{present_count}")
+    print(f"Total Students Absent:\t{absent_count}")
+    print("===========================================\n")
+
+    # --- Task 6 (Bonus): Save Attendance Report to File ---
+    
+    while True:
+        save_choice = input("Do you wish to save this report to a file? (yes/no): ").strip().lower()
+        if save_choice in ['yes', 'y', 'no', 'n']:
+            break
+        print("Invalid input. Please enter 'yes' or 'no'.")
+
+    if save_choice in ['yes', 'y']:
+        try:
+            # Use datetime module 
+            report_time = datetime.datetime.now().strftime("%Y-%m-%d %I:%M:%S %p")
+            
+            with open("attendance_log.txt", "w") as f:
+                f.write("=====================================\n")
+                f.write("   KRMU ATTENDANCE LOG\n")
+                f.write("=====================================\n")
+                f.write(f"Report Generated: {report_time}\n\n")
+                
+                f.write("--- Present Students ---\n")
+                f.write(f"Student Name\t\tCheck-in Time\n{'-'*35}\n")
+                
+                # Write student names and timestamps
+                for name, time in attendance_data.items():
+                    if len(name) < 16:
+                        f.write(f"{name}\t\t{time}\n")
+                    else:
+                        f.write(f"{name}\t{time}\n")
+                
+                f.write("\n--- Summary Counts ---\n")
+                # Write present and absent count
+                f.write(f"Total Present:\t{present_count}\n")
+                f.write(f"Total Absent:\t{absent_count}\n")
+                f.write(f"Total Strength:\t{total_students}\n")
+                f.write("=====================================\n")
+            
+            print(f"\nSuccessfully saved report to 'attendance_log.txt'.")
+        except Exception as e:
+            print(f"\n! ERROR: Could not save file. {e}")
+            
+    print("\nThank you for using the Attendance Tracker.")
 
 if __name__ == "__main__":
     main()
-
-
