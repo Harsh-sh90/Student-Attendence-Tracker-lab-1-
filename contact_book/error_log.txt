@@ -1,0 +1,4 @@
+
+[2025-11-18 19:22:52.314918] Task: Showing Contacts (Intentional Test)
+Problem: division by zero
+------------------------------
