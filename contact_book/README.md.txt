@@ -13,8 +13,7 @@ user to manage contact information Such as Name, Phone Number, and Email Address
 The system uses CSV and JSON files for data storage and ensure data persistence
 and error handling through exception management.
 
-     Features
-
+    Features
 -----------------
 1.This application offers a comprehensive suite of features for managing contacts.
 2.Add Contact: Store a new contact's name, phone number, and email.
@@ -30,3 +29,4 @@ and error handling through exception management.
     External References and Acknowledgment
 ---------------------------------------------
 This project is entirely self-contained, utilizing only built-in Python modules for file I/O (csv, json, os, datetime).
+
